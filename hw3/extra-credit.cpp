@@ -5,6 +5,17 @@
 #include "utils.h"
 #include "intrin-wrapper.h"
 
+// Headers for intrinsics
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+#ifdef __AVX__
+#include <immintrin.h>
+#endif
+
 // coefficients in the Taylor series expansion of sin(x)
 static constexpr double c3  = -1/(((double)2)*3);
 static constexpr double c5  =  1/(((double)2)*3*4*5);
@@ -26,7 +37,11 @@ void sin4_reference(double* sinx, const double* x) {
   for (long i = 0; i < 4; i++) sinx[i] = sin(x[i]);
 }
 
-void sin4_taylor(double* sinx, const double* x_mod, const int* flag_copy) {
+void cos4_reference(double* cosx, const double* x) {
+  for (long i = 0; i < 4; i++) cosx[i] = cos(x[i]);
+}
+
+void sin4_taylor(double* sinx, const double* x_mod) {
   for (int i = 0; i < 4; i++) {
     double x1  = x_mod[i];
     double x2  = x1 * x1;
@@ -46,8 +61,9 @@ void sin4_taylor(double* sinx, const double* x_mod, const int* flag_copy) {
     sinx[i] = s;
   }
 }
+// ------------------------------------ End of Function ---------------------------------- //    
 
-void cos4_taylor(double* cosx, const double* x_mod, const int* flag_copy) {
+void cos4_taylor(double* cosx, const double* x_mod) {
   for (int i = 0; i < 4; i++) {
     double x1  = x_mod[i];
     double x2  = x1 * x1;
@@ -68,8 +84,97 @@ void cos4_taylor(double* cosx, const double* x_mod, const int* flag_copy) {
     cosx[i] = s;
   }
 }
+// ------------------------------------ End of Function ---------------------------------- //    
 
-double err(double* x, double* y, long N, int* flag_copy) {
+void sin4_intrin(double* sinx, const double* x_mod) {
+  // The definition of intrinsic functions can be found at:
+  // https://software.intel.com/sites/landingpage/IntrinsicsGuide/#
+#if defined(__AVX__)
+  __m256d x1, x2, x3;
+  x1  = _mm256_load_pd(x);
+  x2  = _mm256_mul_pd(x1, x1);
+  x3  = _mm256_mul_pd(x1, x2);
+
+//  std::cout << "Inside AVX Function" << std::endl;
+
+  __m256d s = x1;
+  s = _mm256_add_pd(s, _mm256_mul_pd(x3 , _mm256_set1_pd(c3 )));
+  _mm256_store_pd(sinx, s);
+#elif defined(__SSE2__)
+
+//  std::cout << "Inside SSE Function" << std::endl;
+
+   constexpr int sse_length = 2;
+  for (int i = 0; i < 4; i+=sse_length) {
+    __m128d x1, x2, x3, x5,x7, x9, x11;
+    x1  = _mm_load_pd(x_mod+i);
+    x2  = _mm_mul_pd(x1, x1);
+    x3  = _mm_mul_pd(x1, x2);
+    x5  = _mm_mul_pd(x3, x2);
+    x7  = _mm_mul_pd(x5, x2);
+    x9  = _mm_mul_pd(x7, x2);
+    x11  = _mm_mul_pd(x9, x2);
+    __m128d s = x1;
+    s = _mm_add_pd(s, _mm_mul_pd(x3 , _mm_set1_pd(c3 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x5 , _mm_set1_pd(c5 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x7 , _mm_set1_pd(c7 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x9 , _mm_set1_pd(c9 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x11 , _mm_set1_pd(c11 )));
+    _mm_store_pd(sinx+i, s);
+  }
+#else
+  sin4_reference(sinx, x);
+#endif
+}
+
+
+// ------------------------------------ End of Function ---------------------------------- //
+
+void cos4_intrin(double* cosx, const double* x_mod) {
+  // The definition of intrinsic functions can be found at:
+  // https://software.intel.com/sites/landingpage/IntrinsicsGuide/#
+#if defined(__AVX__)
+  __m256d x0, x1, x2;
+  x0  = _mm256_set1_pd(1.);
+  x1  = _mm256_load_pd(x);
+  x2  = _mm256_mul_pd(x1, x1);
+
+//  std::cout << "Inside AVX Function" << std::endl;
+
+  __m256d s = x0;
+  s = _mm256_add_pd(s, _mm256_mul_pd(x2 , _mm256_set1_pd(c2 )));
+  _mm256_store_pd(cosx, s);
+#elif defined(__SSE2__)
+
+//  std::cout << "Inside SSE Function" << std::endl;
+
+   int sse_length = 2;
+  for (int i = 0; i < 4; i+=sse_length) {
+    __m128d x0, x1, x2, x4, x6,x8, x10;
+    x0  = _mm_set1_pd (1.);
+    x1  = _mm_load_pd(x_mod+i);
+    x2  = _mm_mul_pd(x1, x1);
+    x4  = _mm_mul_pd(x2, x2);
+    x6  = _mm_mul_pd(x4, x2);
+    x8  = _mm_mul_pd(x6, x2);
+    x10  = _mm_mul_pd(x8, x2);
+    __m128d s = x0;
+
+    s = _mm_add_pd(s, _mm_mul_pd(x2 , _mm_set1_pd(c2 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x4 , _mm_set1_pd(c4 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x6 , _mm_set1_pd(c6 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x8 , _mm_set1_pd(c8 )));
+    s = _mm_add_pd(s, _mm_mul_pd(x10 , _mm_set1_pd(c10 )));
+    _mm_store_pd(cosx+i, s);
+  }
+#else
+  cos4_reference(cosx, x);
+#endif
+}
+
+// ------------------------------------ End of Function ---------------------------------- //
+
+double err(double* x, double* y, long N) {
   double error = 0;
   for (long i = 0; i < N; i++) {
     error = std::max(error, fabs(x[i]-y[i]));
@@ -144,8 +249,8 @@ int main() {
   tt.tic();
   for (long rep = 0; rep < 1000; rep++) {
     for (long i = 0; i < N; i+=4) {
-      sin4_taylor(sinx_taylor+i, x_mod+i, flag+i);
-      cos4_taylor(cosx_taylor+i, x_mod+i, flag+i);
+      sin4_taylor(sinx_taylor+i, x_mod+i);
+      cos4_taylor(cosx_taylor+i, x_mod+i);
     }
   }
     
@@ -155,8 +260,26 @@ int main() {
       else if (flag[i] == 1) sinx_taylor[i] = cosx_taylor[i];
       else if(flag[i] == -1) sinx_taylor[i] = cosx_taylor[i]*-1;
   }
+  printf("Taylor time    %6.4f   Error: %e\n", tt.toc(), err(sinx_ref, sinx_taylor, N));
 
-  printf("Taylor time    %6.4f   Error: %e\n", tt.toc(), err(sinx_ref, sinx_taylor, N, flag));
+// -------------------------------------------------------------------------------------------------------//
+  tt.tic();
+  for (long rep = 0; rep < 1000; rep++) {
+    for (long i = 0; i < N; i+=4) 
+    {
+      sin4_intrin(sinx_intrin+i, x_mod+i);
+      cos4_intrin(cosx_intrin+i, x_mod+i);
+    }
+
+    for (long i = 0; i < N; i++) {
+      if(flag[i] == 0) sinx_intrin[i] = sinx_intrin[i];
+      else if(flag[i] == -2) sinx_intrin[i] = sinx_intrin[i]*-1;
+      else if (flag[i] == 1) sinx_intrin[i] = cosx_intrin[i];
+      else if(flag[i] == -1) sinx_intrin[i] = cosx_intrin[i]*-1;
+    }
+  }
+  auto intrinTime = tt.toc();
+  printf("Intrin time:    %6.4f      Error: %e\n", intrinTime, err(sinx_ref, sinx_intrin, N));
 
   aligned_free(x);
   aligned_free(sinx_ref);
