@@ -45,8 +45,8 @@ int main(int argc, char** argv){
     double* c = (double*) malloc(n_blocks*sizeof(double));
 
     // Initialize the vectors
-    for (long i = 0; i < p; i++) a[i] = i;//rand() %100;
-    for (long i = 0; i < p; i++) b[i] = i;//rand() %100;
+    for (long i = 0; i < p; i++) a[i] = rand() %100000;
+    for (long i = 0; i < p; i++) b[i] = rand() %100000;
     
     Timer t;
     t.tic();
@@ -69,7 +69,7 @@ int main(int argc, char** argv){
     double final_sum = 0;
     for (long i = 0; i < n_blocks; i++) final_sum += c[i];
 
-    double max_err = final_sum - c_ref;
+    double max_err = fabs(final_sum - c_ref);
     printf(" %15e\n", max_err);
    
     cudaFree(a_dev);
